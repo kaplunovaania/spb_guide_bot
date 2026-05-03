@@ -383,12 +383,15 @@ ALL_CARDS_DATA = [
 
 def create_universal_keyboard():
     keyboard = VkKeyboard(one_time=False)
-    keyboard.add_button('Начать', color=VkKeyboardColor.PRIMARY)
     keyboard.add_button('Рекомендовать место', color=VkKeyboardColor.PRIMARY)
     keyboard.add_line()
     keyboard.add_button('Мои посещенные места', color=VkKeyboardColor.SECONDARY)
     return keyboard.get_keyboard()
 
+def create_start_keyboard():
+    keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button('Начать', color=VkKeyboardColor.PRIMARY)
+    return keyboard.get_keyboard()
 
 def create_category_keyboard():
     keyboard = VkKeyboard(one_time=True)
@@ -540,13 +543,37 @@ class Bot:
 
             if not text and not attachments:
                 continue
+            if not text or text not in ['начать', 'привет', '/start', 'начать работу',
+                                        'рекомендовать место', 'мои посещенные места',
+                                        'отметить посещение', 'предложить место', 'добавить место',
+                                        'для туристов, приехавших в первый раз',
+                                        'для туристов, уже бывавших в городе',
+                                        'для местных жителей', 'рекомендовать еще']:
 
+                if user_id not in self.submission_states:
+                    self.vk.messages.send(
+                        peer_id=peer_id,
+                        message="Привет. Нажмите «Начать», чтобы запустить гида по Петербургу.",
+                        keyboard=create_start_keyboard(),
+                        random_id=get_random_id()
+                    )
+                    continue
             category = None
 
-            if text in ['начать', 'привет', '/start']:
-                self.vk.messages.send(peer_id=peer_id, message="Здравствуйте! Я Ваш гид по Петербургу. С чего начнем?",
-                                      keyboard=create_universal_keyboard(), random_id=get_random_id())
-
+            if text in ['начать', 'привет', '/start', 'начать работу']:
+                self.vk.messages.send(
+                    peer_id=peer_id,
+                    message="Здравствуйте! Я Ваш гид по Петербургу. С чего начнем?",
+                    keyboard=create_universal_keyboard(),
+                    random_id=get_random_id()
+                )
+            elif text == 'начать':
+                self.vk.messages.send(
+                    peer_id=peer_id,
+                    message="Здравствуйте! Я Ваш гид по Петербургу. С чего начнем?",
+                    keyboard=create_universal_keyboard(),
+                    random_id=get_random_id()
+                )
             elif text == 'рекомендовать место':
                 self.vk.messages.send(peer_id=peer_id, message="Выберите категорию:",
                                       keyboard=create_category_keyboard(), random_id=get_random_id())
