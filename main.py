@@ -707,21 +707,15 @@ class Bot:
                     if text == 'нет фото' or data.get('image_url'):
                         data['user_id'] = user_id
                         data['username'] = event.object.message.get('from_id', 'Unknown')
+                        data['image_url'] = data.get('image_url', '')
                         conn = sqlite3.connect(DB_NAME)
                         cursor = conn.cursor()
                         cursor.execute('''
-                            INSERT INTO pending_cards (user_id, username, title, description, address, image_url, category)
-                            VALUES (:user_id, :username, :title, :description, :address, :image_url, :category)
-                        ''', data)
-
+                                                INSERT INTO pending_cards (user_id, username, title, description, address, image_url, category)
+                                                VALUES (:user_id, :username, :title, :description, :address, :image_url, :category)
+                                            ''', data)
                         conn.commit()
                         conn.close()
-                        del self.submission_states[user_id]
-                        self.vk.messages.send(
-                            peer_id=peer_id,
-                            message="Спасибо! Ваше предложение отправлено на модерацию.\nПосле проверки администратором место появится в рекомендациях.",
-                            random_id=get_random_id()
-                        )
 
                     else:
                         self.vk.messages.send(
