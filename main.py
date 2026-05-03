@@ -383,6 +383,7 @@ ALL_CARDS_DATA = [
 
 def create_universal_keyboard():
     keyboard = VkKeyboard(one_time=False)
+    keyboard.add_button('Начать', color=VkKeyboardColor.PRIMARY)
     keyboard.add_button('Рекомендовать место', color=VkKeyboardColor.PRIMARY)
     keyboard.add_line()
     keyboard.add_button('Мои посещенные места', color=VkKeyboardColor.SECONDARY)
