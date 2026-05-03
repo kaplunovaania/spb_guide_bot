@@ -692,7 +692,6 @@ class Bot:
                         random_id=get_random_id()
                     )
 
-
                 elif step == 'image':
                     if attachments:
                         for att in attachments:
@@ -704,26 +703,48 @@ class Bot:
                                     data['image_url'] = best_size.get('url', '')
                                 break
 
-                    if text == 'нет фото' or data.get('image_url'):
+                    text_clean = text.lower().strip()
+                    if text_clean == 'нет фото' or data.get('image_url'):
                         data['user_id'] = user_id
-                        data['username'] = event.object.message.get('from_id', 'Unknown')
-                        data['image_url'] = data.get('image_url', '')
-                        conn = sqlite3.connect(DB_NAME)
-                        cursor = conn.cursor()
-                        cursor.execute('''
-                                                INSERT INTO pending_cards (user_id, username, title, description, address, image_url, category)
-                                                VALUES (:user_id, :username, :title, :description, :address, :image_url, :category)
-                                            ''', data)
-                        conn.commit()
-                        conn.close()
+                        data['username'] = str(event.object.message.get('from_id', 'Unknown'))
+                        if 'image_url' not in data:
+                            data['image_url'] = ''
+                        print(f"[DEBUG] Сохраняю предложение: {data.get('title')}")
+                        try:
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
+                            cursor.execute('''
+                                INSERT INTO pending_cards (user_id, username, title, description, address, image_url, category)
+                                VALUES (:user_id, :username, :title, :description, :address, :image_url, :category)
+                            ''', data)
+                            conn.commit()
+                            conn.close()
+                            del self.submission_states[user_id]
+                            self.vk.messages.send(
+                                peer_id=peer_id,
+                                message="Спасибо! Ваше предложение отправлено на модерацию.\nПосле проверки администратором место появится в рекомендациях.",
+                                random_id=get_random_id()
+                            )
+                            print("[DEBUG] Предложение успешно сохранено!")
+                        except Exception as e:
+                            print(f"[ERROR] Ошибка при сохранении: {e}")
+                            import traceback
+                            traceback.print_exc()
+                            self.vk.messages.send(
+                                peer_id=peer_id,
+                                message="Произошла ошибка при сохранении. Попробуйте позже.",
+                                random_id=get_random_id()
+                            )
 
                     else:
                         self.vk.messages.send(
                             peer_id=peer_id,
-                            message="Не удалось найти фото. Пожалуйста, прикрепите изображение или напишите 'нет фото'.",
+                            message="Пожалуйста, прикрепите фотографию места или напишите 'нет фото' (без кавычек).",
                             random_id=get_random_id()
-
                         )
+
+
+
             elif text in ['для туристов, приехавших в первый раз', 'для туристов, уже бывавших в городе', 'для местных жителей']:
                 cat_map = {
                     'для туристов, приехавших в первый раз': 'first_time',
