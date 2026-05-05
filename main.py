@@ -10,6 +10,8 @@ from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.upload import VkUpload
 from vk_api.utils import get_random_id
+import time
+import urllib3
 
 load_dotenv()
 VK_TOKEN = os.getenv("VK_TOKEN")
@@ -416,7 +418,7 @@ def create_card_keyboard():
 
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_NAME, timeout=10)
     cursor = conn.cursor()
     cursor.execute('''CREATE TABLE IF NOT EXISTS cards (
         id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT NOT NULL, title TEXT NOT NULL,
@@ -441,7 +443,7 @@ def init_db():
 
 
 def populate_db_if_empty():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_NAME, timeout=10)
     cursor = conn.cursor()
     cursor.execute('SELECT COUNT(*) FROM cards')
     if cursor.fetchone()[0] == 0:
@@ -454,7 +456,7 @@ def populate_db_if_empty():
 
 
 def get_random_card(user_id, category=None):
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_NAME, timeout=10)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     query = 'SELECT * FROM cards WHERE id NOT IN (SELECT card_id FROM visited WHERE user_id = ?)'
@@ -470,7 +472,7 @@ def get_random_card(user_id, category=None):
 
 
 def mark_as_visited(user_id, card_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_NAME, timeout=10)
     cursor = conn.cursor()
     cursor.execute('INSERT OR IGNORE INTO visited (user_id, card_id) VALUES (?, ?)', (user_id, card_id))
     conn.commit()
@@ -486,7 +488,7 @@ def mark_as_visited(user_id, card_id):
 
 
 def show_visited_places(user_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_NAME, timeout=10)
     cursor = conn.cursor()
     cursor.execute('SELECT card_id FROM visited WHERE user_id = ?', (user_id,))
     visited_card_ids = [row[0] for row in cursor.fetchall()]
@@ -530,428 +532,448 @@ class Bot:
         init_db()
         populate_db_if_empty()
 
-        for event in self.longpoll.listen():
-            if event.type != VkBotEventType.MESSAGE_NEW:
-                continue
+        while True:
+            try:
+                for event in self.longpoll.listen():
+                    if event.type != VkBotEventType.MESSAGE_NEW:
+                        continue
 
-            peer_id = event.object.message['peer_id']
-            user_id = event.object.message['from_id']
-            print(f"Сообщение от {user_id}")
+                    peer_id = event.object.message['peer_id']
+                    user_id = event.object.message['from_id']
+                    print(f"Сообщение от {user_id}")
 
-            text = event.object.message.get('text', '').lower().strip()
-            attachments = event.object.message.get('attachments', [])
+                    text = event.object.message.get('text', '').lower().strip()
+                    attachments = event.object.message.get('attachments', [])
 
-            if not text and not attachments:
-                continue
-            if not text or text not in ['начать', 'привет', '/start', 'начать работу',
-                                        'рекомендовать место', 'мои посещенные места',
-                                        'отметить посещение', 'предложить место', 'добавить место',
-                                        'для туристов, приехавших в первый раз',
-                                        'для туристов, уже бывавших в городе',
-                                        'для местных жителей', 'рекомендовать еще']:
+                    if not text and not attachments:
+                        continue
 
-                if user_id not in self.submission_states:
-                    self.vk.messages.send(
-                        peer_id=peer_id,
-                        message="Привет. Нажмите «Начать», чтобы запустить гида по Петербургу.",
-                        keyboard=create_start_keyboard(),
-                        random_id=get_random_id()
-                    )
-                    continue
-            category = None
+                    if user_id in self.submission_states:
+                        self._handle_submission(peer_id, user_id, text, attachments, event)
+                        continue
 
-            if text in ['начать', 'привет', '/start', 'начать работу']:
-                self.vk.messages.send(
-                    peer_id=peer_id,
-                    message="Здравствуйте! Я Ваш гид по Петербургу. С чего начнем?",
-                    keyboard=create_universal_keyboard(),
-                    random_id=get_random_id()
-                )
-            elif text == 'начать':
-                self.vk.messages.send(
-                    peer_id=peer_id,
-                    message="Здравствуйте! Я Ваш гид по Петербургу. С чего начнем?",
-                    keyboard=create_universal_keyboard(),
-                    random_id=get_random_id()
-                )
-            elif text == 'рекомендовать место':
-                self.vk.messages.send(peer_id=peer_id, message="Выберите категорию:",
-                                      keyboard=create_category_keyboard(), random_id=get_random_id())
-
-            elif text == 'отметить посещение':
-                if hasattr(self, 'current_card_id') and self.current_card_id:
-                    mark_as_visited(user_id, self.current_card_id)
-                    self.vk.messages.send(
-                        peer_id=peer_id,
-                        message="Место отмечено как посещённое!",
-                        random_id=get_random_id()
-                    )
-                else:
-                    self.vk.messages.send(
-                        peer_id=peer_id,
-                        message="Сначала получите рекомендацию, затем отметьте посещение.",
-                        random_id=get_random_id()
-                    )
-            elif text == 'мои посещенные места':
-
-                visited_message = show_visited_places(user_id)
-
-                print(f"[DEBUG] Visited places response: {visited_message}")
-
-                self.vk.messages.send(
-                    peer_id=peer_id,
-                    message=visited_message,
-                    random_id=get_random_id()
-
-                )
-
-
-            elif text == 'рекомендовать еще':
-                category = self.user_categories.get(user_id)
-                if not category:
-                    self.vk.messages.send(
-                        peer_id=peer_id,
-                        message="Сначала выберите категорию:",
-                        keyboard=create_category_keyboard(),
-                        random_id=get_random_id()
-
-                    )
-                    continue
-
-                card = get_random_card(user_id, category)
-
-                if not card:
-                    self.vk.messages.send(
-                        peer_id=peer_id,
-                        message="В этой категории не осталось новых мест. Попробуйте другую!",
-                        keyboard=create_category_keyboard(),
-                        random_id=get_random_id()
-                    )
-                    continue
-                self.current_card_id = card['id']
-                msg = f"📍 {card['title']}\n {card['address']}\n\n{card['description']}"
-                try:
-                    resp = requests.get(card['image_url'], timeout=10)
-                    resp.raise_for_status()
-                    img = BytesIO(resp.content)
-                    img.name = 'photo.jpg'
-                    photo = VkUpload(self.vk_session).photo_messages(photos=img, peer_id=peer_id)[0]
-                    self.vk.messages.send(
-                        peer_id=peer_id,
-                        message=msg,
-                        attachment=f"photo{photo['owner_id']}_{photo['id']}",
-                        keyboard=create_card_keyboard(),
-                        random_id=get_random_id()
-                    )
-
-                except Exception as e:
-                    print(f"Фото не загрузилось: {e}")
-                    self.vk.messages.send(
-                        peer_id=peer_id,
-                        message=f"{msg}\n\n🖼️ Ссылка: {card['image_url']}",
-                        keyboard=create_card_keyboard(),
-                        random_id=get_random_id()
-                    )
-
-            elif text == 'предложить место' or text == 'добавить место':
-                self.submission_states[user_id] = {'step': 'title', 'data': {}}
-                self.vk.messages.send(
-                    peer_id=peer_id,
-                    message="Давайте добавим новое место.\n\n"
-                            "1. Сначала напишите название места (например: 'Музей кофе'):",
-                    random_id=get_random_id()
-                )
-
-
-            elif user_id in self.submission_states:
-                state = self.submission_states[user_id]
-                step = state['step']
-                data = state['data']
-
-                if step == 'title':
-                    data['title'] = text
-                    state['step'] = 'category'
-                    self.vk.messages.send(
-                        peer_id=peer_id,
-                        message="Название сохранено.\n\n"
-                                "2. Выберите категорию (напишите цифру):\n"
-                                "1 - Для туристов, приехавших в первый раз\n"
-                                "2 - Для туристов, уже бывавших в городе\n"
-                                "3 - Для местных жителей",
-                        random_id=get_random_id()
-                    )
-
-                elif step == 'category':
-                    cat_map = {'1': 'first_time', '2': 'already_been', '3': 'locals'}
-                    if text in cat_map:
-                        data['category'] = cat_map[text]
-                        state['step'] = 'description'
-                        self.vk.messages.send(
-                            peer_id=peer_id,
-                            message="Категория выбрана.\n\n"
-                                    "3. Теперь напишите описание места (чем оно интересно, что там можно увидеть):",
-                            random_id=get_random_id()
-                        )
-                    else:
-                        self.vk.messages.send(
-                            peer_id=peer_id,
-                            message="Пожалуйста, выберите 1, 2 или 3.",
-                            random_id=get_random_id()
-                        )
-
-                elif step == 'description':
-                    data['description'] = text
-                    state['step'] = 'address'
-                    self.vk.messages.send(
-                        peer_id=peer_id,
-                        message="Описание сохранено.\n\n"
-                                "4. Напишите адрес (например: 'ул. Ленина, 10, метро Площадь Восстания'):",
-                        random_id=get_random_id()
-                    )
-
-                elif step == 'address':
-                    data['address'] = text
-                    state['step'] = 'image'
-                    self.vk.messages.send(
-                        peer_id=peer_id,
-                        message="Адрес сохранён.\n\n"
-                                "5. Теперь отправьте фотографию места (просто прикрепите фото к сообщению):\n"
-                                "Если фото нет, напишите 'нет фото'",
-                        random_id=get_random_id()
-                    )
-
-                elif step == 'image':
-                    if attachments:
-                        for att in attachments:
-                            if att.get('type') == 'photo':
-                                photo_obj = att.get('photo', {})
-                                sizes = photo_obj.get('sizes', [])
-                                if sizes:
-                                    best_size = max(sizes, key=lambda x: x.get('width', 0))
-                                    data['image_url'] = best_size.get('url', '')
-                                break
-
-                    text_clean = text.lower().strip()
-                    if text_clean == 'нет фото' or data.get('image_url'):
-                        data['user_id'] = user_id
-                        data['username'] = str(event.object.message.get('from_id', 'Unknown'))
-                        if 'image_url' not in data:
-                            data['image_url'] = ''
-                        print(f"[DEBUG] Сохраняю предложение: {data.get('title')}")
+                    if not text or text not in [
+                        'начать', 'привет', '/start', 'начать работу',
+                        'рекомендовать место', 'мои посещенные места',
+                        'отметить посещение', 'предложить место', 'добавить место',
+                        'для туристов, приехавших в первый раз',
+                        'для туристов, уже бывавших в городе',
+                        'для местных жителей', 'рекомендовать еще'
+                    ]:
                         try:
-                            conn = sqlite3.connect(DB_NAME)
-                            cursor = conn.cursor()
-                            cursor.execute('''
-                                INSERT INTO pending_cards (user_id, username, title, description, address, image_url, category)
-                                VALUES (:user_id, :username, :title, :description, :address, :image_url, :category)
-                            ''', data)
-                            conn.commit()
-                            conn.close()
-                            del self.submission_states[user_id]
                             self.vk.messages.send(
                                 peer_id=peer_id,
-                                message="Спасибо! Ваше предложение отправлено на модерацию.\nПосле проверки администратором место появится в рекомендациях.",
+                                message="Привет. Нажмите «Начать», чтобы запустить гида по Петербургу.",
+                                keyboard=create_start_keyboard(),
                                 random_id=get_random_id()
                             )
-                            print("[DEBUG] Предложение успешно сохранено!")
-                        except Exception as e:
-                            print(f"[ERROR] Ошибка при сохранении: {e}")
-                            import traceback
-                            traceback.print_exc()
-                            self.vk.messages.send(
-                                peer_id=peer_id,
-                                message="Произошла ошибка при сохранении. Попробуйте позже.",
-                                random_id=get_random_id()
-                            )
+                        except:
+                            pass
+                        continue
 
-                    else:
+                    category = None
+
+                    if text in ['начать', 'привет', '/start', 'начать работу']:
                         self.vk.messages.send(
                             peer_id=peer_id,
-                            message="Пожалуйста, прикрепите фотографию места или напишите 'нет фото' (без кавычек).",
+                            message="Здравствуйте! Я Ваш гид по Петербургу. С чего начнем?",
+                            keyboard=create_universal_keyboard(),
                             random_id=get_random_id()
                         )
 
-
-
-            elif text in ['для туристов, приехавших в первый раз', 'для туристов, уже бывавших в городе', 'для местных жителей']:
-                cat_map = {
-                    'для туристов, приехавших в первый раз': 'first_time',
-                    'для туристов, уже бывавших в городе': 'already_been',
-                    'для местных жителей': 'locals',
-                }
-
-                category = cat_map.get(text)
-                card = get_random_card(user_id, category)
-                if not card:
-                    self.vk.messages.send(peer_id=peer_id,
-                                          message="В этой категории не осталось новых мест. Попробуйте другую!",
-                                          keyboard=create_category_keyboard(),
-                                          random_id=get_random_id())
-                    continue
-                self.current_card_id = card['id']
-                msg = f"📍 {card['title']}\n {card['address']}\n\n{card['description']}"
-                try:
-                    resp = requests.get(card['image_url'], timeout=10)
-                    resp.raise_for_status()
-                    img = BytesIO(resp.content)
-                    img.name = 'photo.jpg'
-                    photo = VkUpload(self.vk_session).photo_messages(photos=img, peer_id=peer_id)[0]
-                    self.vk.messages.send(peer_id=peer_id, message=msg,
-                                          attachment=f"photo{photo['owner_id']}_{photo['id']}",
-                                          keyboard=create_card_keyboard(),  # <---- Новая клавиатура
-                                          random_id=get_random_id())
-
-                except Exception as e:
-                    print(f"Фото не загрузилось: {e}")
-                    self.vk.messages.send(peer_id=peer_id, message=f"{msg}\n\n Ссылка: {card['image_url']}",
-                                          keyboard=create_card_keyboard(),  # <---- Новая клавиатура
-                                          random_id=get_random_id())
-
-            elif text.startswith('/pending') or text == 'проверить предложения':
-                ADMIN_ID = 569511963
-                if user_id != ADMIN_ID:
-                    self.vk.messages.send(
-                        peer_id=peer_id,
-                        message="Доступ только для администратора.",
-                        random_id=get_random_id()
-                    )
-                    continue
-
-                conn = sqlite3.connect(DB_NAME)
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute("SELECT * FROM pending_cards WHERE status = 'pending' ORDER BY created_at DESC LIMIT 5")
-                pending = cursor.fetchall()
-                conn.close()
-
-                if not pending:
-                    self.vk.messages.send(
-                        peer_id=peer_id,
-                        message="Нет новых предложений на модерацию.",
-                        random_id=get_random_id()
-                    )
-                else:
-                    for card in pending:
-                        preview = (
-                            f"ID: {card['id']}\n"
-                            f"От: {card['username']} (user_id: {card['user_id']})\n"
-                            f"Название: {card['title']}\n"
-                            f"Описание: {card['description'][:200]}...\n"
-                            f"Адрес: {card['address']}\n"
-                            f"Категория: {card['category']}\n"
-                            f"Фото: {card['image_url'] or 'нет'}\n\n"
-                            f"Одобрить: /approve {card['id']}\n"
-                            f"Отклонить: /reject {card['id']} причина"
+                    elif text == 'рекомендовать место':
+                        self.vk.messages.send(
+                            peer_id=peer_id,
+                            message="Выберите категорию:",
+                            keyboard=create_category_keyboard(),
+                            random_id=get_random_id()
                         )
-                        if card['image_url']:
-                            try:
-                                resp = requests.get(card['image_url'], timeout=10)
-                                img = BytesIO(resp.content)
-                                img.name = 'preview.jpg'
-                                photo = VkUpload(self.vk_session).photo_messages(photos=img, peer_id=peer_id)[0]
-                                self.vk.messages.send(
-                                    peer_id=peer_id,
-                                    message=preview,
-                                    attachment=f"photo{photo['owner_id']}_{photo['id']}",
-                                    random_id=get_random_id()
-                                )
-                            except:
-                                self.vk.messages.send(peer_id=peer_id, message=preview, random_id=get_random_id())
+
+                    elif text == 'отметить посещение':
+                        if hasattr(self, 'current_card_id') and self.current_card_id:
+                            mark_as_visited(user_id, self.current_card_id)
+                            self.vk.messages.send(
+                                peer_id=peer_id,
+                                message="Место отмечено как посещённое!",
+                                random_id=get_random_id()
+                            )
                         else:
-                            self.vk.messages.send(peer_id=peer_id, message=preview, random_id=get_random_id())
-
-            elif text.startswith('/approve'):
-                ADMIN_ID = 569511963
-                if user_id != ADMIN_ID:
-                    continue
-
-                try:
-                    card_id = int(text.split()[1])
-
-                    conn = sqlite3.connect(DB_NAME)
-                    conn.row_factory = sqlite3.Row
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT * FROM pending_cards WHERE id = ?", (card_id,))
-                    card = cursor.fetchone()
-
-                    if card:
-                        cursor.execute('''
-                            INSERT INTO cards (category, title, image_url, description, address)
-                            VALUES (?, ?, ?, ?, ?)
-                        ''', (card['category'], card['title'], card['image_url'], card['description'], card['address']))
-
-                        cursor.execute("UPDATE pending_cards SET status = 'approved' WHERE id = ?", (card_id,))
-                        conn.commit()
-
-                        try:
                             self.vk.messages.send(
-                                peer_id=card['user_id'],
-                                message=f"Ваше предложение «{card['title']}» одобрено и добавлено в бота!",
+                                peer_id=peer_id,
+                                message="Сначала получите рекомендацию, затем отметьте посещение.",
                                 random_id=get_random_id()
                             )
-                        except:
-                            pass
 
+                    elif text == 'мои посещенные места':
+                        visited_message = show_visited_places(user_id)
+                        print(f"[DEBUG] Visited places response: {visited_message}")
                         self.vk.messages.send(
                             peer_id=peer_id,
-                            message=f"Карточка #{card_id} одобрена и добавлена в базу!",
+                            message=visited_message,
                             random_id=get_random_id()
                         )
+
+                    elif text == 'рекомендовать еще':
+                        category = self.user_categories.get(user_id)
+                        if not category:
+                            self.vk.messages.send(
+                                peer_id=peer_id,
+                                message="Сначала выберите категорию:",
+                                keyboard=create_category_keyboard(),
+                                random_id=get_random_id()
+                            )
+                            continue
+                        self._send_card(peer_id, user_id, category)
+
+                    elif text == 'предложить место' or text == 'добавить место':
+                        self.submission_states[user_id] = {'step': 'title', 'data': {}}
+                        self.vk.messages.send(
+                            peer_id=peer_id,
+                            message="Давайте добавим новое место.\n\n1. Сначала напишите название места (например: 'Музей кофе'):",
+                            random_id=get_random_id()
+                        )
+
+                    elif user_id in self.submission_states:
+                        self._handle_submission(peer_id, user_id, text, attachments, event)
+
+                    elif text in ['для туристов, приехавших в первый раз', 'для туристов, уже бывавших в городе',
+                                  'для местных жителей']:
+                        cat_map = {
+                            'для туристов, приехавших в первый раз': 'first_time',
+                            'для туристов, уже бывавших в городе': 'already_been',
+                            'для местных жителей': 'locals',
+                        }
+                        category = cat_map.get(text)
+                        self.user_categories[user_id] = category
+                        self._send_card(peer_id, user_id, category)
+
+                    elif text.startswith('/pending') or text == 'проверить предложения':
+                        self._handle_pending(peer_id, user_id)
+                    elif text.startswith('/approve'):
+                        self._handle_approve(peer_id, user_id, text)
+                    elif text.startswith('/reject'):
+                        self._handle_reject(peer_id, user_id, text)
+
+                    else:
+                        self.vk.messages.send(
+                            peer_id=peer_id,
+                            message="Извините, я не понял вашу команду. Попробуйте ввести одну из доступных команд (например 'начать').",
+                            random_id=get_random_id()
+                        )
+
+            except (requests.exceptions.ReadTimeout,
+                    requests.exceptions.ConnectionError,
+                    urllib3.exceptions.ReadTimeoutError,
+                    vk_api.exceptions.ApiError) as e:
+                print(f"[WARNING] Ошибка соединения с VK: {e}")
+                print("[INFO] Переподключение через 5 секунд")
+                time.sleep(5)
+                self._reconnect_vk()
+                continue
+
+            except Exception as e:
+                print(f"[ERROR] Неожиданная ошибка: {e}")
+                import traceback
+                traceback.print_exc()
+                print("[INFO] Перезапуск через 10 секунд")
+                time.sleep(10)
+                self._reconnect_vk()
+                continue
+
+    def _reconnect_vk(self):
+        try:
+            self.vk_session = vk_api.VkApi(token=VK_TOKEN)
+            self.longpoll = VkBotLongPoll(self.vk_session, VK_GROUP_ID)
+            self.vk = self.vk_session.get_api()
+            print("[INFO] Соединение с VK восстановлено")
+        except Exception as e:
+            print(f"[ERROR] Не удалось переподключиться к VK: {e}")
+
+    def _send_card(self, peer_id, user_id, category):
+        card = get_random_card(user_id, category)
+        if not card:
+            self.vk.messages.send(
+                peer_id=peer_id,
+                message="В этой категории не осталось новых мест. Попробуйте другую!",
+                keyboard=create_category_keyboard(),
+                random_id=get_random_id()
+            )
+            return
+
+        self.current_card_id = card['id']
+        msg = f"📍 {card['title']}\n {card['address']}\n\n{card['description']}"
+
+        try:
+            resp = requests.get(card['image_url'], timeout=20)
+            resp.raise_for_status()
+            img = BytesIO(resp.content)
+            img.name = 'photo.jpg'
+            photo = VkUpload(self.vk_session).photo_messages(photos=img, peer_id=peer_id)[0]
+            self.vk.messages.send(
+                peer_id=peer_id,
+                message=msg,
+                attachment=f"photo{photo['owner_id']}_{photo['id']}",
+                keyboard=create_card_keyboard(),
+                random_id=get_random_id()
+            )
+        except requests.exceptions.Timeout:
+            self.vk.messages.send(
+                peer_id=peer_id,
+                message=f"{msg}\n\n(Фото загружается долго, попробуйте позже)",
+                keyboard=create_card_keyboard(),
+                random_id=get_random_id()
+            )
+        except Exception as e:
+            print(f"Фото не загрузилось: {e}")
+            self.vk.messages.send(
+                peer_id=peer_id,
+                message=f"{msg}\n\n Ссылка: {card['image_url']}",
+                keyboard=create_card_keyboard(),
+                random_id=get_random_id()
+            )
+
+    def _handle_submission(self, peer_id, user_id, text, attachments, event):
+        state = self.submission_states[user_id]
+        step = state['step']
+        data = state['data']
+
+        if step == 'title':
+            data['title'] = text
+            state['step'] = 'category'
+            self.vk.messages.send(
+                peer_id=peer_id,
+                message="Название сохранено.\n\n2. Выберите категорию (напишите цифру):\n1 - Для туристов, приехавших в первый раз\n2 - Для туристов, уже бывавших в городе\n3 - Для местных жителей",
+                random_id=get_random_id()
+            )
+
+        elif step == 'category':
+            cat_map = {'1': 'first_time', '2': 'already_been', '3': 'locals'}
+            if text in cat_map:
+                data['category'] = cat_map[text]
+                state['step'] = 'description'
+                self.vk.messages.send(
+                    peer_id=peer_id,
+                    message="Категория выбрана.\n\n3. Теперь напишите описание места (чем оно интересно, что там можно увидеть):",
+                    random_id=get_random_id()
+                )
+            else:
+                self.vk.messages.send(
+                    peer_id=peer_id,
+                    message="Пожалуйста, выберите 1, 2 или 3.",
+                    random_id=get_random_id()
+                )
+
+        elif step == 'description':
+            data['description'] = text
+            state['step'] = 'address'
+            self.vk.messages.send(
+                peer_id=peer_id,
+                message="Описание сохранено.\n\n4. Напишите адрес (например: 'ул. Ленина, 10, метро Площадь Восстания'):",
+                random_id=get_random_id()
+            )
+
+        elif step == 'address':
+            data['address'] = text
+            state['step'] = 'image'
+            self.vk.messages.send(
+                peer_id=peer_id,
+                message="Адрес сохранён.\n\n5. Теперь отправьте фотографию места (просто прикрепите фото к сообщению):\nЕсли фото нет, напишите 'нет фото'",
+                random_id=get_random_id()
+            )
+
+        elif step == 'image':
+            if attachments:
+                for att in attachments:
+                    if att.get('type') == 'photo':
+                        photo_obj = att.get('photo', {})
+                        sizes = photo_obj.get('sizes', [])
+                        if sizes:
+                            best_size = max(sizes, key=lambda x: x.get('width', 0))
+                            data['image_url'] = best_size.get('url', '')
+                        break
+
+            text_clean = text.lower().strip()
+            if text_clean == 'нет фото' or data.get('image_url'):
+                data['user_id'] = user_id
+                data['username'] = str(event.object.message.get('from_id', 'Unknown'))
+                if 'image_url' not in data:
+                    data['image_url'] = ''
+
+                print(f"[DEBUG] Сохраняю предложение: {data.get('title')}")
+                try:
+                    conn = sqlite3.connect(DB_NAME, timeout=10)
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        INSERT INTO pending_cards (user_id, username, title, description, address, image_url, category)
+                        VALUES (:user_id, :username, :title, :description, :address, :image_url, :category)
+                    ''', data)
+                    conn.commit()
                     conn.close()
-                except Exception as e:
+
+                    del self.submission_states[user_id]
                     self.vk.messages.send(
                         peer_id=peer_id,
-                        message=f"Ошибка: {e}\nИспользуйте: /approve ID",
+                        message="Спасибо! Ваше предложение отправлено на модерацию.\nПосле проверки администратором место появится в рекомендациях.",
                         random_id=get_random_id()
                     )
-
-            elif text.startswith('/reject'):
-                ADMIN_ID = 569511963
-                if user_id != ADMIN_ID:
-                    continue
-
-                try:
-                    parts = text.split(maxsplit=2)
-                    card_id = int(parts[1])
-                    reason = parts[2] if len(parts) > 2 else "Без указания причины"
-
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT * FROM pending_cards WHERE id = ?", (card_id,))
-                    card = cursor.fetchone()
-
-                    if card:
-                        cursor.execute("UPDATE pending_cards SET status = 'rejected', admin_comment = ? WHERE id = ?",
-                                       (reason, card_id))
-                        conn.commit()
-
-                        try:
-                            self.vk.messages.send(
-                                peer_id=card['user_id'],
-                                message=f"Ваше предложение «{card['title']}» отклонено.\nПричина: {reason}",
-                                random_id=get_random_id()
-                            )
-                        except:
-                            pass
-
-                        self.vk.messages.send(
-                            peer_id=peer_id,
-                            message=f"Карточка #{card_id} отклонена: {reason}",
-                            random_id=get_random_id()
-                        )
-                    conn.close()
-                except Exception as e:
+                    print("[DEBUG] Предложение успешно сохранено!")
+                except sqlite3.Error as e:
+                    print(f"[ERROR] Ошибка БД при сохранении: {e}")
                     self.vk.messages.send(
                         peer_id=peer_id,
-                        message=f"Ошибка: {e}\nИспользуйте: /reject ID причина",
+                        message="Произошла ошибка при сохранении. Попробуйте позже.",
+                        random_id=get_random_id()
+                    )
+                except Exception as e:
+                    print(f"[ERROR] Ошибка при сохранении: {e}")
+                    self.vk.messages.send(
+                        peer_id=peer_id,
+                        message="Произошла ошибка при сохранении. Попробуйте позже.",
                         random_id=get_random_id()
                     )
             else:
                 self.vk.messages.send(
                     peer_id=peer_id,
-                    message="Извините, я не понял вашу команду. Попробуйте ввести одну из доступных команд (например 'начать').",
+                    message="Пожалуйста, прикрепите фотографию места или напишите 'нет фото' (без кавычек).",
                     random_id=get_random_id()
                 )
+
+    def _handle_pending(self, peer_id, user_id):
+        ADMIN_ID = 569511963
+        if user_id != ADMIN_ID:
+            self.vk.messages.send(
+                peer_id=peer_id,
+                message="Доступ только для администратора.",
+                random_id=get_random_id()
+            )
+            return
+
+        try:
+            conn = sqlite3.connect(DB_NAME, timeout=10)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM pending_cards WHERE status = 'pending' ORDER BY created_at DESC LIMIT 5")
+            pending = cursor.fetchall()
+            conn.close()
+
+            if not pending:
+                self.vk.messages.send(
+                    peer_id=peer_id,
+                    message="Нет новых предложений на модерацию.",
+                    random_id=get_random_id()
+                )
+            else:
+                for card in pending:
+                    preview = (
+                        f"ID: {card['id']}\n"
+                        f"От: {card['username']} (user_id: {card['user_id']})\n"
+                        f"Название: {card['title']}\n"
+                        f"Описание: {card['description'][:200]}...\n"
+                        f"Адрес: {card['address']}\n"
+                        f"Категория: {card['category']}\n"
+                        f"Фото: {card['image_url'] or 'нет'}\n\n"
+                        f"Одобрить: /approve {card['id']}\n"
+                        f"Отклонить: /reject {card['id']} причина"
+                    )
+                    if card['image_url']:
+                        try:
+                            resp = requests.get(card['image_url'], timeout=15)
+                            img = BytesIO(resp.content)
+                            img.name = 'preview.jpg'
+                            photo = VkUpload(self.vk_session).photo_messages(photos=img, peer_id=peer_id)[0]
+                            self.vk.messages.send(
+                                peer_id=peer_id,
+                                message=preview,
+                                attachment=f"photo{photo['owner_id']}_{photo['id']}",
+                                random_id=get_random_id()
+                            )
+                        except:
+                            self.vk.messages.send(peer_id=peer_id, message=preview, random_id=get_random_id())
+                    else:
+                        self.vk.messages.send(peer_id=peer_id, message=preview, random_id=get_random_id())
+        except Exception as e:
+            print(f"[ERROR] Ошибка при просмотре pending: {e}")
+            self.vk.messages.send(
+                peer_id=peer_id,
+                message="Ошибка при загрузке предложений. Попробуйте позже.",
+                random_id=get_random_id()
+            )
+
+    def _handle_approve(self, peer_id, user_id, text):
+        ADMIN_ID = 569511963
+        if user_id != ADMIN_ID:
+            return
+        try:
+            card_id = int(text.split()[1])
+            conn = sqlite3.connect(DB_NAME, timeout=10)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM pending_cards WHERE id = ?", (card_id,))
+            card = cursor.fetchone()
+            if card:
+                cursor.execute('''
+                    INSERT INTO cards (category, title, image_url, description, address)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (card['category'], card['title'], card['image_url'], card['description'], card['address']))
+                cursor.execute("UPDATE pending_cards SET status = 'approved' WHERE id = ?", (card_id,))
+                conn.commit()
+                try:
+                    self.vk.messages.send(
+                        peer_id=card['user_id'],
+                        message=f"Ваше предложение «{card['title']}» одобрено и добавлено в бота!",
+                        random_id=get_random_id()
+                    )
+                except:
+                    pass
+                self.vk.messages.send(
+                    peer_id=peer_id,
+                    message=f"Карточка #{card_id} одобрена и добавлена в базу!",
+                    random_id=get_random_id()
+                )
+            conn.close()
+        except Exception as e:
+            self.vk.messages.send(
+                peer_id=peer_id,
+                message=f"Ошибка: {e}\nИспользуйте: /approve ID",
+                random_id=get_random_id()
+            )
+
+    def _handle_reject(self, peer_id, user_id, text):
+        ADMIN_ID = 569511963
+        if user_id != ADMIN_ID:
+            return
+        try:
+            parts = text.split(maxsplit=2)
+            card_id = int(parts[1])
+            reason = parts[2] if len(parts) > 2 else "Без указания причины"
+            conn = sqlite3.connect(DB_NAME, timeout=10)
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM pending_cards WHERE id = ?", (card_id,))
+            card = cursor.fetchone()
+            if card:
+                cursor.execute("UPDATE pending_cards SET status = 'rejected', admin_comment = ? WHERE id = ?",
+                               (reason, card_id))
+                conn.commit()
+                try:
+                    self.vk.messages.send(
+                        peer_id=card['user_id'],
+                        message=f"Ваше предложение «{card['title']}» отклонено.\nПричина: {reason}",
+                        random_id=get_random_id()
+                    )
+                except:
+                    pass
+                self.vk.messages.send(
+                    peer_id=peer_id,
+                    message=f"Карточка #{card_id} отклонена: {reason}",
+                    random_id=get_random_id()
+                )
+            conn.close()
+        except Exception as e:
+            self.vk.messages.send(
+                peer_id=peer_id,
+                message=f"Ошибка: {e}\nИспользуйте: /reject ID причина",
+                random_id=get_random_id()
+            )
 
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
