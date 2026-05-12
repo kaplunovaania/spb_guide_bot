@@ -20,7 +20,6 @@ DB_NAME = 'spb_bot.db'
 IMAGES_FOLDER = 'images'
 
 ALL_CARDS_DATA = [
-    # === Для туристов, которые в первый раз ===
     {
         'filename': '1.png',
         'category': 'first_time',
@@ -119,7 +118,7 @@ ALL_CARDS_DATA = [
         'description': 'Именно отсюда открывается самый живописный вид на город. С каменного берега можно полюбоваться Петропавловской крепостью, Эрмитажем и Адмиралтейством. Это еще и крупнейший музейно-научный центр. Здесь располагается здание академии наук, музей этнографии, Кунсткамера, Пушкинский дом. Постоять, глазея на широкие волны Невы, на проходящие мимо судна - сама по себе медитация.',
         'address': 'Санкт-Петербург, Биржевая площадь, метро «Адмиралтейская»',
         'location_type': 'city',
-        'district': 'В.О.',
+        'district': 'Васильевский остров',
     },
     {
         'filename': '11.png',
@@ -240,7 +239,7 @@ ALL_CARDS_DATA = [
         'description': 'Креативное пространство, которое переделали из кабельного завода 19 века. С набережной открывается панорамный вид на Финский залив и Морской вокзал, а через бинокли (они установлены) можно увидеть Кронштадт, - хорошие фотографии обеспечены. Вдоль набережной установлена 160-метровая барная стойка, самая длинная в городе) Посмотрите, что теперь в 5 зданиях завода, и обязательно наткнетесь на одно из мероприятий - они тут проходят постоянно.',
         'address': 'Кожевенная линия, д. 40',
         'location_type': 'city',
-        'district': 'В.О.',
+        'district': 'Васильевский остров',
     },
     {
         'filename': '23.png',
@@ -401,7 +400,7 @@ ALL_CARDS_DATA = [
         'description': 'Если будете на Василеостровском, смело сворачивайте на Кожевенную линию. Среди промышленных пейзажей вас ждет настоящая фантасмагория-заброшенный особняк купцов Брусницыных. Дворец никогда в жизни не реставрировали, настолько здесь все историческое и нетронутое. Еще говорят, что в одной из комнат было проклятое зеркало с прахом графа Дракулы. Посещение только с экскурсией.',
         'address': 'Кожевенная линия, 27',
         'location_type': 'city',
-        'district': 'В.О.',
+        'district': 'Васильевский остров',
     },
     {
         'filename': '39.png',
@@ -441,7 +440,7 @@ ALL_CARDS_DATA = [
         'description': 'Некрополи Санкт-Петербурга - это не только места упокоения, но и уникальные исторические хроники, запечатленные в камне. Так, на Смоленском кладбище есть памятник Н. А. Стенбок-Фермор, богатейшей женщины Российской империи, в виде саркофага, полностью покрытого цветами. Также здесь находится часовня Ксении Петербургской, одной из самых почитаемых святых города, к которой каждый день идут с просьбами и надеждой. Хоронить здесь начали сразу, как только на острове поселились первые петербуржцы. Официально кладбище появилось в 1738 году. Погост с ходу поражает цифрой - здесь захоронен один миллион двести тысяч человек.',
         'address': 'ул. Камская, д. 26.',
         'location_type': 'city',
-        'district': 'В.О.',
+        'district': 'Васильевский остров',
     },
     {
         'filename': '43.png',
@@ -518,124 +517,112 @@ def create_location_type_keyboard():
     return keyboard.get_keyboard()
 
 
-def create_district_keyboard(location_type):
+def has_places_in_district(user_id, category, location_type, district):
+    conn = sqlite3.connect(DB_NAME, timeout=10)
+    cursor = conn.cursor()
+
+    query = '''
+        SELECT COUNT(*) FROM cards 
+        WHERE category = ? 
+        AND location_type = ? 
+        AND district = ?
+        AND id NOT IN (SELECT card_id FROM visited WHERE user_id = ?)
+    '''
+    cursor.execute(query, (category, location_type, district.lower(), user_id))
+    count = cursor.fetchone()[0]
+    conn.close()
+
+    return count > 0
+
+
+def create_district_keyboard(location_type, category=None, user_id=None):
     keyboard = VkKeyboard(one_time=True)
 
     if location_type == 'city':
-        districts = ['центр', 'в.о.', 'петроградский', 'приморский',
-                     'выборгский', 'московский', 'адмиралтейский', 'другой']
+        districts = ['Центр', 'Васильевский остров', 'Петроградский', 'Приморский',
+                     'Выборгский', 'Московский', 'Адмиралтейский', 'Другой']
     else:
-        districts = ['петергоф', 'пушкин', 'кронштадт', 'гатчина',
-                     'ломоносов', 'выборг', 'шлиссельбург', 'другой']
+        districts = ['Петергоф', 'Пушкин', 'Кронштадт', 'Гатчина',
+                     'Ломоносов', 'Выборг', 'Шлиссельбург', 'Другой']
 
     for i in range(0, len(districts), 2):
-        keyboard.add_button(districts[i].capitalize(), color=VkKeyboardColor.SECONDARY) # Визуально с большой
+        district = districts[i]
+
+        if category and user_id and district.lower() != 'другой':
+            if has_places_in_district(user_id, category, location_type, district):
+                color = VkKeyboardColor.PRIMARY
+            else:
+                color = VkKeyboardColor.SECONDARY
+        else:
+            color = VkKeyboardColor.SECONDARY
+
+        keyboard.add_button(district, color=color)
+
         if i + 1 < len(districts):
-            keyboard.add_button(districts[i+1].capitalize(), color=VkKeyboardColor.SECONDARY)
+            district2 = districts[i + 1]
+
+            if category and user_id and district2.lower() != 'другой':
+                if has_places_in_district(user_id, category, location_type, district2):
+                    color2 = VkKeyboardColor.PRIMARY
+                else:
+                    color2 = VkKeyboardColor.SECONDARY
+            else:
+                color2 = VkKeyboardColor.SECONDARY
+
+            keyboard.add_button(district2, color=color2)
+
         keyboard.add_line()
 
     keyboard.add_button('Назад', color=VkKeyboardColor.NEGATIVE)
     return keyboard.get_keyboard()
 
-
 def init_db():
     conn = sqlite3.connect(DB_NAME, timeout=10)
     cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(cards)")
-    columns = [row[1] for row in cursor.fetchall()]
-    if 'location_type' not in columns or 'district' not in columns:
-        print("[MIGRATION] Обновляю структуру БД (удаляю старые таблицы cards и pending_cards)...")
-        cursor.execute("DROP TABLE IF EXISTS cards")
-        cursor.execute("DROP TABLE IF EXISTS pending_cards")
 
-        cursor.execute('''CREATE TABLE cards (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, 
-            category TEXT NOT NULL, 
-            title TEXT NOT NULL,
-            image_url TEXT NOT NULL, 
-            description TEXT NOT NULL, 
-            address TEXT,
-            location_type TEXT,
-            district TEXT
-        )''')
-        cursor.execute('''CREATE TABLE pending_cards (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL, username TEXT, title TEXT NOT NULL,
-            description TEXT NOT NULL, address TEXT NOT NULL, image_url TEXT,
-            category TEXT NOT NULL, location_type TEXT, district TEXT,
-            status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP, admin_comment TEXT
-        )''')
-        conn.commit()
-        print("[MIGRATION] Структура обновлена.")
-    else:
-        cursor.execute('''CREATE TABLE IF NOT EXISTS cards (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, 
-            category TEXT NOT NULL, 
-            title TEXT NOT NULL,
-            image_url TEXT NOT NULL, 
-            description TEXT NOT NULL, 
-            address TEXT,
-            location_type TEXT,
-            district TEXT
-        )''')
-        cursor.execute('''CREATE TABLE IF NOT EXISTS pending_cards (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL, username TEXT, title TEXT NOT NULL,
-            description TEXT NOT NULL, address TEXT NOT NULL, image_url TEXT,
-            category TEXT NOT NULL, location_type TEXT, district TEXT,
-            status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP, admin_comment TEXT
-        )''')
-        conn.commit()
+    cursor.execute("DROP TABLE IF EXISTS cards")
+    cursor.execute("DROP TABLE IF EXISTS pending_cards")
+
+    cursor.execute('''CREATE TABLE cards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        category TEXT NOT NULL, 
+        title TEXT NOT NULL,
+        image_url TEXT NOT NULL, 
+        description TEXT NOT NULL, 
+        address TEXT,
+        location_type TEXT,
+        district TEXT
+    )''')
+
+    cursor.execute('''CREATE TABLE pending_cards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL, username TEXT, title TEXT NOT NULL,
+        description TEXT NOT NULL, address TEXT NOT NULL, image_url TEXT,
+        category TEXT NOT NULL, location_type TEXT, district TEXT,
+        status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP, admin_comment TEXT
+    )''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS visited (
         user_id INTEGER, card_id INTEGER, PRIMARY KEY (user_id, card_id))''')
+
     conn.commit()
     conn.close()
 
 
-def populate_db_if_empty(force_rebuild=False):
+def populate_db_if_empty():
     conn = sqlite3.connect(DB_NAME, timeout=10)
     cursor = conn.cursor()
 
-    if force_rebuild:
-        print("[DB]Принудительная пересборка базы...")
-        cursor.execute("DELETE FROM visited")
-        cursor.execute("DELETE FROM cards")
+    for card in ALL_CARDS_DATA:
+        cursor.execute('''
+            INSERT INTO cards (category, title, image_url, description, address, location_type, district)
+            VALUES (:category, :title, :image_url, :description, :address, :location_type, :district)
+        ''', {
+            **card,
+            'district': card['district'].lower()
+        })
 
-    cursor.execute("SELECT COUNT(*) FROM cards")
-    count = cursor.fetchone()[0]
-
-    if count == 0 or force_rebuild:
-        print(f"[DB] Заполняю базу: {len(ALL_CARDS_DATA)} мест...")
-
-        for i, card in enumerate(ALL_CARDS_DATA, 1):
-            try:
-                cursor.execute('''
-                    INSERT INTO cards (category, title, image_url, description, address, location_type, district)
-                    VALUES (:category, :title, :image_url, :description, :address, :location_type, :district)
-                ''', card)
-                if i % 10 == 0:
-                    print(f"[DB] Загружено {i}/{len(ALL_CARDS_DATA)} мест")
-            except sqlite3.Error as e:
-                print(f"[ERROR] Ошибка при вставке карточки {card['title']}: {e}")
-
-        conn.commit()
-
-        cursor.execute("SELECT COUNT(*) FROM cards")
-        new_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM cards WHERE location_type IS NOT NULL AND district IS NOT NULL")
-        filled_count = cursor.fetchone()[0]
-
-        print(f"[DB]Готово! Всего мест: {new_count}, с локацией: {filled_count}")
-
-        # Выводим пару примеров для проверки
-        cursor.execute("SELECT title, district FROM cards LIMIT 3")
-        examples = cursor.fetchall()
-        for title, district in examples:
-            print(f"[DB] Пример: '{title}' — район: {district}")
-    else:
-        print(f"[DB] База уже заполнена: {count} мест")
-
+    conn.commit()
     conn.close()
 
 def get_random_card(user_id, category=None):
@@ -669,7 +656,7 @@ def get_random_card_with_filters(user_id, category=None, location_type=None, dis
         query += ' AND location_type = ?'
         params.append(location_type)
     if district and district != 'другой':
-        query += ' AND LOWER(district) = ?'
+        query += ' AND district = ?'
         params.append(district)
 
     cursor.execute(query, params)
@@ -736,17 +723,13 @@ class Bot:
         self.user_categories = {}
         self.submission_states = {}
         self.user_location_filter = {}
-
-        # 🔥 Дедупликация сообщений по ID
         self.processed_message_ids = set()
         self.max_processed_ids = 500
 
     def run(self):
         print("Бот запущен. Ожидание сообщений")
-        FORCE_REBUILD_DB = True
-
         init_db()
-        populate_db_if_empty(force_rebuild=FORCE_REBUILD_DB)
+        populate_db_if_empty()
 
         while True:
             try:
@@ -764,7 +747,6 @@ class Bot:
 
                     if message_id:
                         self.processed_message_ids.add(message_id)
-                        # Очищаем старые ID, чтобы не занимать память
                         if len(self.processed_message_ids) > self.max_processed_ids:
                             to_remove = list(self.processed_message_ids)[:self.max_processed_ids // 2]
                             for mid in to_remove:
@@ -825,6 +807,7 @@ class Bot:
                             random_id=get_random_id()
                         )
 
+
                     elif text == 'рекомендовать еще':
                         category = self.user_categories.get(user_id)
                         if not category:
@@ -835,7 +818,13 @@ class Bot:
                                 random_id=get_random_id()
                             )
                         else:
-                            self._send_card(peer_id, user_id, category)
+                            self.user_location_filter[user_id] = {'category': category, 'step': 'location_type'}
+                            self.vk.messages.send(
+                                peer_id=peer_id,
+                                message="Отлично! Теперь выберите, где искать место:",
+                                keyboard=create_location_type_keyboard(),
+                                random_id=get_random_id()
+                            )
 
                     elif text in ['предложить место', 'добавить место']:
                         self.submission_states[user_id] = {'step': 'title', 'data': {}}
@@ -904,49 +893,6 @@ class Bot:
             print("[INFO] Соединение с VK восстановлено")
         except Exception as e:
             print(f"[ERROR] Не удалось переподключиться к VK: {e}")
-
-    def _send_card(self, peer_id, user_id, category):
-        card = get_random_card(user_id, category)
-        if not card:
-            self.vk.messages.send(
-                peer_id=peer_id,
-                message="В этой категории не осталось новых мест. Попробуйте другую!",
-                keyboard=create_category_keyboard(),
-                random_id=get_random_id()
-            )
-            return
-
-        self.current_card_id = card['id']
-        msg = f"📍 {card['title']}\n {card['address']}\n\n{card['description']}"
-
-        try:
-            resp = requests.get(card['image_url'], timeout=20)
-            resp.raise_for_status()
-            img = BytesIO(resp.content)
-            img.name = 'photo.jpg'
-            photo = VkUpload(self.vk_session).photo_messages(photos=img, peer_id=peer_id)[0]
-            self.vk.messages.send(
-                peer_id=peer_id,
-                message=msg,
-                attachment=f"photo{photo['owner_id']}_{photo['id']}",
-                keyboard=create_card_keyboard(),
-                random_id=get_random_id()
-            )
-        except requests.exceptions.Timeout:
-            self.vk.messages.send(
-                peer_id=peer_id,
-                message=f"{msg}\n\n(Фото загружается долго, попробуйте позже)",
-                keyboard=create_card_keyboard(),
-                random_id=get_random_id()
-            )
-        except Exception as e:
-            print(f"Фото не загрузилось: {e}")
-            self.vk.messages.send(
-                peer_id=peer_id,
-                message=f"{msg}\n\n Ссылка: {card['image_url']}",
-                keyboard=create_card_keyboard(),
-                random_id=get_random_id()
-            )
 
     def _send_card_with_location(self, peer_id, user_id, card):
         self.current_card_id = card['id']
@@ -1156,7 +1102,7 @@ class Bot:
                 self.vk.messages.send(
                     peer_id=peer_id,
                     message="Выберите район города:",
-                    keyboard=create_district_keyboard('city'),
+                    keyboard=create_district_keyboard('city', category=filter_state['category'], user_id=user_id),
                     random_id=get_random_id()
                 )
             elif text == 'за городом':
@@ -1165,7 +1111,7 @@ class Bot:
                 self.vk.messages.send(
                     peer_id=peer_id,
                     message="Выберите направление:",
-                    keyboard=create_district_keyboard('outside'),
+                    keyboard=create_district_keyboard('outside', category=filter_state['category'], user_id=user_id),
                     random_id=get_random_id()
                 )
             elif text in ['назад', 'меню']:
