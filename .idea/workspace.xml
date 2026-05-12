@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="3d267a4e-90d3-4623-91bd-08a8e812abb9" name="Changes" comment="исправили регистр (вроде)">
+    <list default="true" id="3d267a4e-90d3-4623-91bd-08a8e812abb9" name="Changes" comment="мяу(">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
@@ -162,7 +162,23 @@
       <option name="project" value="LOCAL" />
       <updated>1778587216946</updated>
     </task>
-    <option name="localTasksCounter" value="12" />
+    <task id="LOCAL-00012" summary="исправили регистр (вроде) или нет">
+      <option name="closed" value="true" />
+      <created>1778589241334</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1778589241334</updated>
+    </task>
+    <task id="LOCAL-00013" summary="мяу(">
+      <option name="closed" value="true" />
+      <created>1778596430542</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1778596430542</updated>
+    </task>
+    <option name="localTasksCounter" value="14" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -175,6 +191,8 @@
     <MESSAGE value="еще обновила базу" />
     <MESSAGE value="пробуем обговить базу" />
     <MESSAGE value="исправили регистр (вроде)" />
-    <option name="LAST_COMMIT_MESSAGE" value="исправили регистр (вроде)" />
+    <MESSAGE value="исправили регистр (вроде) или нет" />
+    <MESSAGE value="мяу(" />
+    <option name="LAST_COMMIT_MESSAGE" value="мяу(" />
   </component>
 </project>

@@ -593,28 +593,50 @@ def init_db():
     conn.close()
 
 
-def populate_db_if_empty():
+def populate_db_if_empty(force_rebuild=False):
     conn = sqlite3.connect(DB_NAME, timeout=10)
     cursor = conn.cursor()
-    print("[DB] Полная перезагрузка базы данных...")
-    cursor.execute("DELETE FROM cards")
-    cursor.execute("DELETE FROM visited")
 
-    for card in ALL_CARDS_DATA:
-        cursor.execute('''INSERT INTO cards (category, title, image_url, description, address, location_type, district)
-                          VALUES (:category, :title, :image_url, :description, :address, :location_type, :district)''',
-                       card)
+    if force_rebuild:
+        print("[DB]Принудительная пересборка базы...")
+        cursor.execute("DELETE FROM visited")
+        cursor.execute("DELETE FROM cards")
 
-    conn.commit()
-    print(f"[DB]База заполнена: {len(ALL_CARDS_DATA)} мест")
-
-    # Проверка
-    cursor.execute("SELECT COUNT(*) FROM cards WHERE location_type IS NOT NULL AND district IS NOT NULL")
+    cursor.execute("SELECT COUNT(*) FROM cards")
     count = cursor.fetchone()[0]
-    print(f"[DB]Проверка: {count} мест с заполненными полями локации")
+
+    if count == 0 or force_rebuild:
+        print(f"[DB] Заполняю базу: {len(ALL_CARDS_DATA)} мест...")
+
+        for i, card in enumerate(ALL_CARDS_DATA, 1):
+            try:
+                cursor.execute('''
+                    INSERT INTO cards (category, title, image_url, description, address, location_type, district)
+                    VALUES (:category, :title, :image_url, :description, :address, :location_type, :district)
+                ''', card)
+                if i % 10 == 0:
+                    print(f"[DB] Загружено {i}/{len(ALL_CARDS_DATA)} мест")
+            except sqlite3.Error as e:
+                print(f"[ERROR] Ошибка при вставке карточки {card['title']}: {e}")
+
+        conn.commit()
+
+        cursor.execute("SELECT COUNT(*) FROM cards")
+        new_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM cards WHERE location_type IS NOT NULL AND district IS NOT NULL")
+        filled_count = cursor.fetchone()[0]
+
+        print(f"[DB]Готово! Всего мест: {new_count}, с локацией: {filled_count}")
+
+        # Выводим пару примеров для проверки
+        cursor.execute("SELECT title, district FROM cards LIMIT 3")
+        examples = cursor.fetchall()
+        for title, district in examples:
+            print(f"[DB] Пример: '{title}' — район: {district}")
+    else:
+        print(f"[DB] База уже заполнена: {count} мест")
 
     conn.close()
-
 
 def get_random_card(user_id, category=None):
     conn = sqlite3.connect(DB_NAME, timeout=10)
@@ -721,8 +743,10 @@ class Bot:
 
     def run(self):
         print("Бот запущен. Ожидание сообщений")
+        FORCE_REBUILD_DB = True
+
         init_db()
-        populate_db_if_empty()
+        populate_db_if_empty(force_rebuild=FORCE_REBUILD_DB)
 
         while True:
             try:
