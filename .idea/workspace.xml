@@ -4,9 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="3d267a4e-90d3-4623-91bd-08a8e812abb9" name="Changes" comment="добавила начать">
+    <list default="true" id="3d267a4e-90d3-4623-91bd-08a8e812abb9" name="Changes" comment="все еще чиню">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/spb_bot.db" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -48,6 +49,7 @@
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "Python.database.executor": "Run",
     "Python.main.executor": "Run",
+    "Python.preprocessing.executor": "Run",
     "Python.test.executor": "Run",
     "Python.vk_bot.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
@@ -121,7 +123,15 @@
       <option name="project" value="LOCAL" />
       <updated>1777842870022</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="все еще чиню">
+      <option name="closed" value="true" />
+      <created>1777974881729</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1777974881729</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -129,6 +139,7 @@
     <MESSAGE value="исправила" />
     <MESSAGE value="еще исправила" />
     <MESSAGE value="добавила начать" />
-    <option name="LAST_COMMIT_MESSAGE" value="добавила начать" />
+    <MESSAGE value="все еще чиню" />
+    <option name="LAST_COMMIT_MESSAGE" value="все еще чиню" />
   </component>
 </project>
