@@ -522,16 +522,16 @@ def create_district_keyboard(location_type):
     keyboard = VkKeyboard(one_time=True)
 
     if location_type == 'city':
-        districts = ['Центр', 'В.О.', 'Петроградский', 'Приморский',
-                     'Выборгский', 'Московский', 'Адмиралтейский', 'Другой']
+        districts = ['центр', 'в.о.', 'петроградский', 'приморский',
+                     'выборгский', 'московский', 'адмиралтейский', 'другой']
     else:
-        districts = ['Петергоф', 'Пушкин', 'Кронштадт', 'Гатчина',
-                     'Ломоносов', 'Выборг', 'Шлиссельбург', 'Другой']
+        districts = ['петергоф', 'пушкин', 'кронштадт', 'гатчина',
+                     'ломоносов', 'выборг', 'шлиссельбург', 'другой']
 
     for i in range(0, len(districts), 2):
-        keyboard.add_button(districts[i], color=VkKeyboardColor.SECONDARY)
+        keyboard.add_button(districts[i].capitalize(), color=VkKeyboardColor.SECONDARY) # Визуально с большой
         if i + 1 < len(districts):
-            keyboard.add_button(districts[i + 1], color=VkKeyboardColor.SECONDARY)
+            keyboard.add_button(districts[i+1].capitalize(), color=VkKeyboardColor.SESECONDARY)
         keyboard.add_line()
 
     keyboard.add_button('Назад', color=VkKeyboardColor.NEGATIVE)
@@ -636,8 +636,8 @@ def get_random_card_with_filters(user_id, category=None, location_type=None, dis
     if location_type:
         query += ' AND location_type = ?'
         params.append(location_type)
-    if district and district != 'Другой':
-        query += ' AND district = ?'
+    if district and district != 'другой':
+        query += ' AND LOWER(district) = ?'
         params.append(district)
 
     cursor.execute(query, params)
