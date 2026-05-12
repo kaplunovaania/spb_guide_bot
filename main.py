@@ -596,13 +596,23 @@ def init_db():
 def populate_db_if_empty():
     conn = sqlite3.connect(DB_NAME, timeout=10)
     cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM cards')
-    if cursor.fetchone()[0] == 0:
-        for card in ALL_CARDS_DATA:
-            cursor.execute('''INSERT INTO cards (category, title, image_url, description, address, location_type, district)
-                              VALUES (:category, :title, :image_url, :description, :address, :location_type, :district)''', card)
-        conn.commit()
-        print(f"База заполнена: {len(ALL_CARDS_DATA)} мест")
+    print("[DB] Полная перезагрузка базы данных...")
+    cursor.execute("DELETE FROM cards")
+    cursor.execute("DELETE FROM visited")
+
+    for card in ALL_CARDS_DATA:
+        cursor.execute('''INSERT INTO cards (category, title, image_url, description, address, location_type, district)
+                          VALUES (:category, :title, :image_url, :description, :address, :location_type, :district)''',
+                       card)
+
+    conn.commit()
+    print(f"[DB]База заполнена: {len(ALL_CARDS_DATA)} мест")
+
+    # Проверка
+    cursor.execute("SELECT COUNT(*) FROM cards WHERE location_type IS NOT NULL AND district IS NOT NULL")
+    count = cursor.fetchone()[0]
+    print(f"[DB]Проверка: {count} мест с заполненными полями локации")
+
     conn.close()
 
 
