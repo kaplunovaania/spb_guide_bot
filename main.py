@@ -172,7 +172,6 @@ ALL_CARDS_DATA = [
         'district': 'Кронштадт',
     },
 
-    # === Для туристов, которые уже бывали ===
     {
         'filename': '16.png',
         'category': 'already_been',
@@ -324,7 +323,6 @@ ALL_CARDS_DATA = [
         'district': 'Центр',
     },
 
-    # === Для местных жителей ===
     {
         'filename': '31.png',
         'category': 'locals',
@@ -539,36 +537,58 @@ def create_district_keyboard(location_type):
     keyboard.add_button('Назад', color=VkKeyboardColor.NEGATIVE)
     return keyboard.get_keyboard()
 
+
 def init_db():
     conn = sqlite3.connect(DB_NAME, timeout=10)
     cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS cards (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, 
-        category TEXT NOT NULL, 
-        title TEXT NOT NULL,
-        image_url TEXT NOT NULL, 
-        description TEXT NOT NULL, 
-        address TEXT,
-        location_type TEXT,
-        district TEXT
-    )''')
+    cursor.execute("PRAGMA table_info(cards)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if 'location_type' not in columns or 'district' not in columns:
+        print("[MIGRATION] Обновляю структуру БД (удаляю старые таблицы cards и pending_cards)...")
+        cursor.execute("DROP TABLE IF EXISTS cards")
+        cursor.execute("DROP TABLE IF EXISTS pending_cards")
+
+        cursor.execute('''CREATE TABLE cards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            category TEXT NOT NULL, 
+            title TEXT NOT NULL,
+            image_url TEXT NOT NULL, 
+            description TEXT NOT NULL, 
+            address TEXT,
+            location_type TEXT,
+            district TEXT
+        )''')
+        cursor.execute('''CREATE TABLE pending_cards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL, username TEXT, title TEXT NOT NULL,
+            description TEXT NOT NULL, address TEXT NOT NULL, image_url TEXT,
+            category TEXT NOT NULL, location_type TEXT, district TEXT,
+            status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP, admin_comment TEXT
+        )''')
+        conn.commit()
+        print("[MIGRATION] Структура обновлена.")
+    else:
+        cursor.execute('''CREATE TABLE IF NOT EXISTS cards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            category TEXT NOT NULL, 
+            title TEXT NOT NULL,
+            image_url TEXT NOT NULL, 
+            description TEXT NOT NULL, 
+            address TEXT,
+            location_type TEXT,
+            district TEXT
+        )''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS pending_cards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL, username TEXT, title TEXT NOT NULL,
+            description TEXT NOT NULL, address TEXT NOT NULL, image_url TEXT,
+            category TEXT NOT NULL, location_type TEXT, district TEXT,
+            status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP, admin_comment TEXT
+        )''')
+        conn.commit()
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS visited (
         user_id INTEGER, card_id INTEGER, PRIMARY KEY (user_id, card_id))''')
-    cursor.execute('''CREATE TABLE IF NOT EXISTS pending_cards (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            username TEXT,
-            title TEXT NOT NULL,
-            description TEXT NOT NULL,
-            address TEXT NOT NULL,
-            image_url TEXT,
-            category TEXT NOT NULL,
-            location_type TEXT,
-            district TEXT,
-            status TEXT DEFAULT 'pending',
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            admin_comment TEXT
-        )''')
     conn.commit()
     conn.close()
 
