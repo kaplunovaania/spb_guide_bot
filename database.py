@@ -14,7 +14,9 @@ async def init_db():
                 image_url TEXT,
                 description TEXT NOT NULL,
                 address TEXT,
-                author_id INTEGER DEFAULT 0 -- 0 - системные, >0 - добавленные пользователями
+                location_type TEXT,
+                district TEXT,
+                author_id INTEGER DEFAULT
             )
         ''')
 
