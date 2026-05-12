@@ -531,7 +531,7 @@ def create_district_keyboard(location_type):
     for i in range(0, len(districts), 2):
         keyboard.add_button(districts[i].capitalize(), color=VkKeyboardColor.SECONDARY) # Визуально с большой
         if i + 1 < len(districts):
-            keyboard.add_button(districts[i+1].capitalize(), color=VkKeyboardColor.SESECONDARY)
+            keyboard.add_button(districts[i+1].capitalize(), color=VkKeyboardColor.SECONDARY)
         keyboard.add_line()
 
     keyboard.add_button('Назад', color=VkKeyboardColor.NEGATIVE)

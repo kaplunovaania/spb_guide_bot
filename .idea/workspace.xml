@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="3d267a4e-90d3-4623-91bd-08a8e812abb9" name="Changes" comment="еще обновила базу">
+    <list default="true" id="3d267a4e-90d3-4623-91bd-08a8e812abb9" name="Changes" comment="исправили регистр (вроде)">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
@@ -146,7 +146,23 @@
       <option name="project" value="LOCAL" />
       <updated>1778585513995</updated>
     </task>
-    <option name="localTasksCounter" value="10" />
+    <task id="LOCAL-00010" summary="пробуем обговить базу">
+      <option name="closed" value="true" />
+      <created>1778586774637</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1778586774637</updated>
+    </task>
+    <task id="LOCAL-00011" summary="исправили регистр (вроде)">
+      <option name="closed" value="true" />
+      <created>1778587216946</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1778587216946</updated>
+    </task>
+    <option name="localTasksCounter" value="12" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -157,6 +173,8 @@
     <MESSAGE value="все еще чиню" />
     <MESSAGE value="добавление локаций" />
     <MESSAGE value="еще обновила базу" />
-    <option name="LAST_COMMIT_MESSAGE" value="еще обновила базу" />
+    <MESSAGE value="пробуем обговить базу" />
+    <MESSAGE value="исправили регистр (вроде)" />
+    <option name="LAST_COMMIT_MESSAGE" value="исправили регистр (вроде)" />
   </component>
 </project>
